@@ -51,6 +51,7 @@ class Rule(db.Model):
     pattern = db.Column(db.String(160), nullable=False) # text or regex (prefix re:)
     field = db.Column(db.String(16), default="merchant") # merchant|note
     category_id = db.Column(db.Integer, db.ForeignKey("category.id"))
+    scope_account_id = db.Column(db.Integer, db.ForeignKey("account.id"))
     min_amount = str  # documentary only; use Numeric in real DBs via SQLAlchemy Numeric
     max_amount = str
     priority = db.Column(db.Integer, default=100)
