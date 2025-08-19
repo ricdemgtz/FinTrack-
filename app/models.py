@@ -20,11 +20,19 @@ def load_user(user_id):
     return User.query.get(int(user_id))
 
 class Account(db.Model):
+    __table_args__ = (
+        db.CheckConstraint(
+            "opening_balance >= 0", name="ck_account_opening_balance_non_negative"
+        ),
+    )
+
     id = db.Column(db.Integer, primary_key=True)
     user_id = db.Column(db.Integer, db.ForeignKey("user.id"), index=True, nullable=False)
     name = db.Column(db.String(80), nullable=False)
     type = db.Column(db.String(20), nullable=False)  # cash|bank|card
     currency = db.Column(db.String(8), default="MXN")
+    opening_balance = db.Column(db.Numeric(12, 2), nullable=False, default=0)
+    active = db.Column(db.Boolean, default=True, index=True)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     deleted_at = db.Column(db.DateTime)
 
