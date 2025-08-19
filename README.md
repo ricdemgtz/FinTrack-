@@ -5,15 +5,42 @@ It includes a minimal Flask app with blueprints, models, templates, and a basic 
 
 ## Quickstart
 
+Interactively explore the basic setup using the expandable sections below.
+
+<details>
+<summary><strong>📦 Environment setup</strong></summary>
+
+1. Create and activate a virtual environment
+
+    ```bash
+    python -m venv .venv
+    source .venv/bin/activate  # Windows: .venv\Scripts\activate
+    ```
+
+2. Install dependencies
+
+    ```bash
+    pip install -r requirements.txt
+    ```
+
+3. Configure environment variables
+
+    ```bash
+    cp .env.example .env
+    ```
+
+</details>
+
+<details>
+<summary><strong>🚀 Run the app</strong></summary>
+
 ```bash
-python -m venv .venv
-source .venv/bin/activate  # Windows: .venv\Scripts\activate
-pip install -r requirements.txt
-cp .env.example .env
 python run.py
 ```
 
-Then open http://localhost:5000
+Then open http://localhost:5000 in your browser.
+
+</details>
 
 ## Structure
 
