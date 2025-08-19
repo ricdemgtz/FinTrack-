@@ -26,6 +26,7 @@ class Account(db.Model):
     type = db.Column(db.String(20), nullable=False)  # cash|bank|card
     currency = db.Column(db.String(8), default="MXN")
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    deleted_at = db.Column(db.DateTime)
 
 class Category(db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -34,6 +35,7 @@ class Category(db.Model):
     kind = db.Column(db.String(16), nullable=False)  # expense|income
     color = db.Column(db.String(16), default="#888888")
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    deleted_at = db.Column(db.DateTime)
 
 class Rule(db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -45,6 +47,7 @@ class Rule(db.Model):
     max_amount = str
     priority = db.Column(db.Integer, default=100)
     active = db.Column(db.Boolean, default=True)
+    deleted_at = db.Column(db.DateTime)
 
 class Transaction(db.Model):
     id = db.Column(db.Integer, primary_key=True)
