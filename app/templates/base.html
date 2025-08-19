@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>FinTrack+</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/main.css') }}">
+</head>
+<body>
+  <nav class="nav">
+    <a href="{{ url_for('web.dashboard') }}">Dashboard</a>
+    <a href="{{ url_for('web.upload_page') }}">Upload</a>
+    {% if current_user.is_authenticated %}
+    <form action="{{ url_for('auth.logout') }}" method="post" style="display:inline;">
+      <button type="submit">Logout</button>
+    </form>
+    {% else %}
+      <a href="{{ url_for('auth.login') }}">Login</a>
+    {% endif %}
+  </nav>
+  <main class="container">
+    {% block content %}{% endblock %}
+  </main>
+  <script src="{{ url_for('static', filename='js/main.js') }}"></script>
+</body>
+</html>

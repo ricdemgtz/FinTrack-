@@ -1,0 +1,15 @@
+{% extends "base.html" %}
+{% block content %}
+<h1>Upload Receipt</h1>
+<form method="post" action="/api/upload" enctype="multipart/form-data">
+  <label>Account</label>
+  <select name="account_id" required>
+    {% for a in accounts %}
+      <option value="{{ a.id }}">{{ a.name }} ({{ a.type }})</option>
+    {% endfor %}
+  </select>
+  <br>
+  <input type="file" name="file" accept=".jpg,.jpeg,.png,.pdf" required />
+  <button type="submit">Upload</button>
+</form>
+{% endblock %}
