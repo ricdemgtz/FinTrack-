@@ -102,6 +102,18 @@ def accounts_create():
         return _error("invalid name", errors={"name": ["required or length"]})
     if not acc_type:
         return _error("name and type required")
+    if acc_type not in current_app.config.get("ALLOWED_ACCOUNT_TYPES", set()):
+        return _error(
+            "invalid account type",
+            status=422,
+            errors={"type": ["invalid"]},
+        )
+    if currency not in current_app.config.get("ALLOWED_CURRENCIES", []):
+        return _error(
+            "invalid currency",
+            status=422,
+            errors={"currency": ["invalid"]},
+        )
     exists = (
         Account.query.filter(Account.user_id == current_user.id)
         .filter(db.func.lower(Account.name) == name.lower())
@@ -148,9 +160,24 @@ def accounts_update(id):
         if exists:
             return _error("duplicate account name", status=409, errors={"name": ["exists"]})
         data["name"] = name
-    for field in ["name", "type", "currency"]:
-        if field in data:
-            setattr(a, field, data[field])
+    if "type" in data:
+        if data["type"] not in current_app.config.get("ALLOWED_ACCOUNT_TYPES", set()):
+            return _error(
+                "invalid account type",
+                status=422,
+                errors={"type": ["invalid"]},
+            )
+        a.type = data["type"]
+    if "currency" in data:
+        if data["currency"] not in current_app.config.get("ALLOWED_CURRENCIES", []):
+            return _error(
+                "invalid currency",
+                status=422,
+                errors={"currency": ["invalid"]},
+            )
+        a.currency = data["currency"]
+    if "name" in data:
+        a.name = data["name"]
     db.session.commit()
     return _success(_account_to_dict(a))
 

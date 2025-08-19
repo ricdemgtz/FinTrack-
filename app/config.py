@@ -12,3 +12,13 @@ class Config:
     MAX_CONTENT_LENGTH = int(float(_get_env("MAX_UPLOAD_MB", "10")) * 1024 * 1024)
 
     ALLOWED_EXTENSIONS = set((_get_env("ALLOWED_EXTENSIONS", "jpg,jpeg,png,pdf")).split(","))
+
+    ALLOWED_ACCOUNT_TYPES = set(
+        (_get_env(
+            "ALLOWED_ACCOUNT_TYPES",
+            "checking,cash,credit,wallet,savings,investment",
+        )).split(",")
+    )
+    ALLOWED_CURRENCIES = (
+        _get_env("ALLOWED_CURRENCIES", "MXN,USD").split(",")
+    )
