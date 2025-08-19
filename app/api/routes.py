@@ -95,10 +95,12 @@ def accounts_list():
 @login_required
 def accounts_create():
     data = request.get_json() or {}
-    name = data.get("name")
+    name = (data.get("name") or "").strip()
     acc_type = data.get("type")
     currency = data.get("currency", "MXN")
-    if not name or not acc_type:
+    if not name or not (1 <= len(name) <= 80):
+        return _error("invalid name", errors={"name": ["required or length"]})
+    if not acc_type:
         return _error("name and type required")
     exists = (
         Account.query.filter(Account.user_id == current_user.id)
@@ -133,7 +135,9 @@ def accounts_update(id):
     a = _get_account(id)
     data = request.get_json() or {}
     if "name" in data:
-        name = data["name"]
+        name = (data["name"] or "").strip()
+        if not name or not (1 <= len(name) <= 80):
+            return _error("invalid name", errors={"name": ["required or length"]})
         exists = (
             Account.query.filter(Account.user_id == current_user.id)
             .filter(db.func.lower(Account.name) == name.lower())
@@ -143,6 +147,7 @@ def accounts_update(id):
         )
         if exists:
             return _error("duplicate account name", status=409, errors={"name": ["exists"]})
+        data["name"] = name
     for field in ["name", "type", "currency"]:
         if field in data:
             setattr(a, field, data[field])
