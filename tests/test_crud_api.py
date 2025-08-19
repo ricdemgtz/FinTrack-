@@ -26,18 +26,30 @@ def register(client):
 def test_cruds(client):
     register(client)
     # Accounts
-    res = client.post('/api/accounts', json={'name': 'Cash', 'type': 'cash'})
+    res = client.post(
+        '/api/accounts',
+        json={'name': 'Cash', 'type': 'cash', 'opening_balance': 100, 'active': False},
+    )
     assert res.status_code == 201
     acc_id = res.get_json()['data']['id']
+    assert res.get_json()['data']['opening_balance'] == 100
+    assert res.get_json()['data']['active'] is False
     res = client.get('/api/accounts')
     assert len(res.get_json()['data']) == 1
-    res = client.put(f'/api/accounts/{acc_id}', json={'name': 'Wallet'})
+    res = client.put(f'/api/accounts/{acc_id}', json={'name': 'Wallet', 'active': True})
     assert res.get_json()['data']['name'] == 'Wallet'
+    assert res.get_json()['data']['active'] is True
+    res = client.put(f'/api/accounts/{acc_id}', json={'active': False})
+    assert res.get_json()['data']['active'] is False
     res = client.delete(f'/api/accounts/{acc_id}')
     assert res.get_json()['success'] is True
     assert client.get('/api/accounts').get_json()['data'] == []
-    res = client.post(f'/api/accounts/{acc_id}/restore')
-    assert res.get_json()['data']['id'] == acc_id
+    res = client.post(f'/api/accounts/{acc_id}/restore', json={})
+    assert res.get_json()['data']['active'] is False
+    assert res.get_json()['data']['opening_balance'] == 100
+    res = client.delete(f'/api/accounts/{acc_id}')
+    client.post(f'/api/accounts/{acc_id}/restore', json={'active': True})
+    assert client.get(f'/api/accounts/{acc_id}').get_json()['data']['active'] is True
 
     # Categories
     res = client.post('/api/categories', json={'name': 'Food', 'kind': 'expense'})

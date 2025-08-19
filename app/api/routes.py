@@ -77,7 +77,14 @@ def upload():
 # --- Accounts CRUD ---
 
 def _account_to_dict(a: Account):
-    return {"id": a.id, "name": a.name, "type": a.type, "currency": a.currency}
+    return {
+        "id": a.id,
+        "name": a.name,
+        "type": a.type,
+        "currency": a.currency,
+        "opening_balance": float(a.opening_balance),
+        "active": a.active,
+    }
 
 
 @api_bp.get("/accounts")
@@ -98,6 +105,8 @@ def accounts_create():
     name = (data.get("name") or "").strip()
     acc_type = data.get("type")
     currency = data.get("currency", "MXN")
+    opening_balance = data.get("opening_balance", 0)
+    active = data.get("active", True)
     if not name or not (1 <= len(name) <= 80):
         return _error("invalid name", errors={"name": ["required or length"]})
     if not acc_type:
@@ -114,6 +123,26 @@ def accounts_create():
             status=422,
             errors={"currency": ["invalid"]},
         )
+    try:
+        opening_balance = float(opening_balance)
+    except (TypeError, ValueError):
+        return _error(
+            "invalid opening_balance",
+            status=422,
+            errors={"opening_balance": ["invalid"]},
+        )
+    if opening_balance < 0:
+        return _error(
+            "opening_balance must be >= 0",
+            status=422,
+            errors={"opening_balance": ["negative"]},
+        )
+    if not isinstance(active, bool):
+        return _error(
+            "invalid active",
+            status=422,
+            errors={"active": ["invalid"]},
+        )
     exists = (
         Account.query.filter(Account.user_id == current_user.id)
         .filter(db.func.lower(Account.name) == name.lower())
@@ -122,7 +151,14 @@ def accounts_create():
     )
     if exists:
         return _error("duplicate account name", status=409, errors={"name": ["exists"]})
-    a = Account(user_id=current_user.id, name=name, type=acc_type, currency=currency)
+    a = Account(
+        user_id=current_user.id,
+        name=name,
+        type=acc_type,
+        currency=currency,
+        opening_balance=opening_balance,
+        active=active,
+    )
     db.session.add(a); db.session.commit()
     return _success(_account_to_dict(a), status=201)
 
@@ -176,6 +212,30 @@ def accounts_update(id):
                 errors={"currency": ["invalid"]},
             )
         a.currency = data["currency"]
+    if "opening_balance" in data:
+        try:
+            ob = float(data["opening_balance"])
+        except (TypeError, ValueError):
+            return _error(
+                "invalid opening_balance",
+                status=422,
+                errors={"opening_balance": ["invalid"]},
+            )
+        if ob < 0:
+            return _error(
+                "opening_balance must be >= 0",
+                status=422,
+                errors={"opening_balance": ["negative"]},
+            )
+        a.opening_balance = ob
+    if "active" in data:
+        if not isinstance(data["active"], bool):
+            return _error(
+                "invalid active",
+                status=422,
+                errors={"active": ["invalid"]},
+            )
+        a.active = data["active"]
     if "name" in data:
         a.name = data["name"]
     db.session.commit()
@@ -205,7 +265,10 @@ def accounts_restore(id):
     )
     if dup:
         return _error("duplicate account name", status=409, errors={"name": ["exists"]})
+    data = request.get_json() or {}
     a.deleted_at = None
+    if data.get("active") is True:
+        a.active = True
     db.session.commit()
     return _success(_account_to_dict(a))
 
