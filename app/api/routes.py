@@ -246,9 +246,17 @@ def accounts_update(id):
 @login_required
 def accounts_delete(id):
     a = _get_account(id)
+    rules = (
+        Rule.query.filter_by(user_id=current_user.id, scope_account_id=id, active=True)
+        .filter(Rule.deleted_at.is_(None))
+        .all()
+    )
+    for r in rules:
+        r.active = False
     a.deleted_at = datetime.utcnow()
     db.session.commit()
-    return _success({"id": id})
+    count = len(rules)
+    return _success({"id": id, "disabled_rules": count}, message=f"{count} rule(s) disabled")
 
 
 @api_bp.post("/accounts/<int:id>/restore")
@@ -387,6 +395,7 @@ def _rule_to_dict(r: Rule):
         "pattern": r.pattern,
         "field": r.field,
         "category_id": r.category_id,
+        "scope_account_id": r.scope_account_id,
         "min_amount": _safe(getattr(r, "min_amount", None)),
         "max_amount": _safe(getattr(r, "max_amount", None)),
         "priority": r.priority,
@@ -412,6 +421,7 @@ def rules_create():
     pattern = data.get("pattern")
     field = data.get("field", "merchant")
     category_id = data.get("category_id")
+    scope_account_id = data.get("scope_account_id")
     min_amount = data.get("min_amount")
     max_amount = data.get("max_amount")
     priority = data.get("priority", 100)
@@ -426,11 +436,20 @@ def rules_create():
         )
         if not cat:
             return _error("invalid category")
+    if scope_account_id:
+        acc = (
+            Account.query.filter_by(id=scope_account_id, user_id=current_user.id)
+            .filter(Account.deleted_at.is_(None))
+            .first()
+        )
+        if not acc:
+            return _error("invalid account")
     r = Rule(
         user_id=current_user.id,
         pattern=pattern,
         field=field,
         category_id=category_id,
+        scope_account_id=scope_account_id,
         min_amount=min_amount,
         max_amount=max_amount,
         priority=priority,
@@ -459,7 +478,16 @@ def rules_get(id):
 def rules_update(id):
     r = _get_rule(id)
     data = request.get_json() or {}
-    for field in ["pattern", "field", "category_id", "min_amount", "max_amount", "priority", "active"]:
+    for field in [
+        "pattern",
+        "field",
+        "category_id",
+        "scope_account_id",
+        "min_amount",
+        "max_amount",
+        "priority",
+        "active",
+    ]:
         if field in data:
             setattr(r, field, data[field])
     db.session.commit()
