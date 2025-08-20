@@ -89,6 +89,17 @@ def test_cruds(client):
     assert updated['icon_emoji'] == '\u26A1'
     assert updated['is_system'] is True
 
+    res = client.post(
+        '/api/categories',
+        json={'name': 'Bad', 'kind': 'expense', 'icon_emoji': 'abc'},
+    )
+    assert res.status_code == 422
+    res = client.put(
+        f'/api/categories/{child_id}',
+        json={'icon_emoji': '👨‍👩‍👦'},
+    )
+    assert res.status_code == 422
+
     # Rules
     res = client.post('/api/rules', json={'pattern': 'Star', 'category_id': cat_id})
     assert res.status_code == 201
