@@ -45,8 +45,15 @@ def test_no_duplicate_active_categories(client):
     cat_id = res.get_json()['data']['id']
     res = client.post('/api/categories', json={'name': 'Food', 'kind': 'expense'})
     assert res.status_code == 409
-    client.delete(f'/api/categories/{cat_id}')
+    client.delete(f'/api/categories/{cat_id}?confirm=true')
     res = client.post('/api/categories', json={'name': 'Food', 'kind': 'expense'})
     assert res.status_code == 201
     res_restore = client.post(f'/api/categories/{cat_id}/restore')
     assert res_restore.status_code == 409
+
+    res_sys = client.post('/api/categories', json={'name': 'Sys', 'kind': 'expense', 'is_system': True})
+    assert res_sys.status_code == 201
+    res_user = client.post('/api/categories', json={'name': 'Sys', 'kind': 'expense'})
+    assert res_user.status_code == 201
+    res_user_dup = client.post('/api/categories', json={'name': 'Sys', 'kind': 'expense'})
+    assert res_user_dup.status_code == 409
