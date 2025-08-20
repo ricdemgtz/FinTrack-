@@ -124,6 +124,17 @@ def test_cruds(client):
     assert client.get('/api/rules').get_json()['data'] == []
     res = client.post(f'/api/rules/{rule_id}/restore')
     assert res.get_json()['data']['id'] == rule_id
+    client.put(f'/api/rules/{rule_id}', json={'active': True})
+
+    res = client.delete(f'/api/categories/{cat_id}?confirm=true')
+    data = res.get_json()
+    assert data['success'] is True
+    assert data['message'] == '1 rule(s) disabled'
+    assert data['data']['disabled_rules'] == 1
+    assert client.get(f'/api/rules/{rule_id}').get_json()['data']['active'] is False
+    res = client.post(f'/api/categories/{cat_id}/restore')
+    assert res.get_json()['data']['id'] == cat_id
+    assert client.get(f'/api/rules/{rule_id}').get_json()['data']['active'] is True
 
     # Account delete disables scoped rules
     res = client.post('/api/rules', json={'pattern': 'Scoped', 'scope_account_id': acc_id})
