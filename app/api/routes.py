@@ -1,7 +1,7 @@
 from flask import Blueprint, request, jsonify, current_app
 from flask_login import login_required, current_user
 from werkzeug.utils import secure_filename
-import os, hashlib, re
+import os, hashlib, re, unicodedata
 from datetime import date, datetime
 from .. import db
 from ..models import Transaction, Attachment, Account, Category, Rule
@@ -37,6 +37,13 @@ def _supports_partial_index():
 
 
 _COLOR_RE = re.compile(r"^#?[0-9A-Fa-f]{6}$")
+_EMOJI_RE = re.compile(
+    r'^([\U0001F1E6-\U0001F1FF]{2}|['
+    r'\U0001F300-\U0001FAFF'
+    r'\u2600-\u26FF'
+    r'\u2700-\u27BF'
+    r'][\uFE0F\U0001F3FB-\U0001F3FF]?)$'
+)
 
 
 def _normalize_color(value: str | None):
@@ -45,6 +52,17 @@ def _normalize_color(value: str | None):
     if not _COLOR_RE.fullmatch(value):
         return None
     return f"#{value.lstrip('#').upper()}"
+
+
+def _normalize_icon_emoji(value: str | None):
+    if value is None or value == "":
+        return None
+    value = unicodedata.normalize("NFC", value)
+    if not _EMOJI_RE.fullmatch(value):
+        return None
+    if len(value) > 2:
+        return None
+    return value
 
 @api_bp.post("/upload")
 @login_required
@@ -349,7 +367,10 @@ def categories_create():
     name = (data.get("name") or "").strip()
     kind = data.get("kind")
     color = _normalize_color(data.get("color", "#888888"))
-    icon_emoji = data.get("icon_emoji")
+    raw_icon = data.get("icon_emoji")
+    icon_emoji = _normalize_icon_emoji(raw_icon)
+    if raw_icon not in (None, "") and icon_emoji is None:
+        return _error("invalid icon emoji", status=422, errors={"icon_emoji": ["invalid emoji"]})
     parent_id = data.get("parent_id")
     is_system = data.get("is_system", False)
     if not name or not (1 <= len(name) <= 60):
@@ -426,6 +447,11 @@ def categories_update(id):
         if norm is None:
             return _error("invalid color", status=422, errors={"color": ["invalid hex"]})
         data["color"] = norm
+    if "icon_emoji" in data:
+        icon_norm = _normalize_icon_emoji(data["icon_emoji"])
+        if data["icon_emoji"] not in (None, "") and icon_norm is None:
+            return _error("invalid icon emoji", status=422, errors={"icon_emoji": ["invalid emoji"]})
+        data["icon_emoji"] = icon_norm
     for field in ["name", "kind", "color", "icon_emoji", "parent_id", "is_system"]:
         if field in data:
             setattr(c, field, data[field])
