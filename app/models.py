@@ -43,7 +43,7 @@ class Category(db.Model):
     kind = db.Column(db.String(16), nullable=False)  # expense|income
     color = db.Column(db.String(16), default="#888888")
     icon_emoji = db.Column(db.String(16))
-    parent_id = db.Column(db.Integer, db.ForeignKey("category.id"))
+    parent_id = db.Column(db.Integer, db.ForeignKey("category.id"), index=True)
     is_system = db.Column(db.Boolean, default=False, nullable=False)
     parent = db.relationship("Category", remote_side=[id], backref="children")
     created_at = db.Column(db.DateTime, default=datetime.utcnow)

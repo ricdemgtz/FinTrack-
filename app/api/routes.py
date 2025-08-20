@@ -372,6 +372,14 @@ def categories_create():
     if raw_icon not in (None, "") and icon_emoji is None:
         return _error("invalid icon emoji", status=422, errors={"icon_emoji": ["invalid emoji"]})
     parent_id = data.get("parent_id")
+    if parent_id is not None:
+        parent = (
+            Category.query.filter_by(id=parent_id, user_id=current_user.id)
+            .filter(Category.deleted_at.is_(None))
+            .first()
+        )
+        if not parent:
+            return _error("invalid parent category")
     is_system = data.get("is_system", False)
     if not name or not (1 <= len(name) <= 60):
         return _error("invalid name", errors={"name": ["required or length"]})
@@ -452,7 +460,25 @@ def categories_update(id):
         if data["icon_emoji"] not in (None, "") and icon_norm is None:
             return _error("invalid icon emoji", status=422, errors={"icon_emoji": ["invalid emoji"]})
         data["icon_emoji"] = icon_norm
-    for field in ["name", "kind", "color", "icon_emoji", "parent_id", "is_system"]:
+    if "parent_id" in data:
+        parent_id = data["parent_id"]
+        if parent_id is not None:
+            parent = (
+                Category.query.filter_by(id=parent_id, user_id=current_user.id)
+                .filter(Category.deleted_at.is_(None))
+                .first()
+            )
+            if not parent:
+                return _error("invalid parent category")
+            ancestor = parent
+            while ancestor:
+                if ancestor.id == c.id:
+                    return _error("invalid parent category")
+                ancestor = ancestor.parent
+            c.parent_id = parent_id
+        else:
+            c.parent_id = None
+    for field in ["name", "kind", "color", "icon_emoji", "is_system"]:
         if field in data:
             setattr(c, field, data[field])
     try:
