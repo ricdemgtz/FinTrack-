@@ -89,6 +89,10 @@ def test_cruds(client):
     assert updated['icon_emoji'] == '\u26A1'
     assert updated['is_system'] is True
 
+    # Prevent cycles in category hierarchy
+    res = client.put(f'/api/categories/{parent_id}', json={'parent_id': child_id})
+    assert res.status_code == 400
+
     res = client.post(
         '/api/categories',
         json={'name': 'Bad', 'kind': 'expense', 'icon_emoji': 'abc'},
@@ -124,3 +128,16 @@ def test_cruds(client):
     assert data['data']['disabled_rules'] == 1
     res = client.get(f'/api/rules/{scoped_rule_id}')
     assert res.get_json()['data']['active'] is False
+
+    # Parent category must belong to the same user
+    client.post('/auth/logout', follow_redirects=True)
+    client.post(
+        '/auth/register',
+        data={'email': 'other@example.com', 'password': 'pass'},
+        follow_redirects=True,
+    )
+    res = client.post(
+        '/api/categories',
+        json={'name': 'Other', 'kind': 'expense', 'parent_id': parent_id},
+    )
+    assert res.status_code == 400
