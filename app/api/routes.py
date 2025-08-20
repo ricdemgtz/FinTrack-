@@ -309,7 +309,15 @@ def accounts_restore(id):
 # --- Categories CRUD ---
 
 def _category_to_dict(c: Category):
-    return {"id": c.id, "name": c.name, "kind": c.kind, "color": c.color}
+    return {
+        "id": c.id,
+        "name": c.name,
+        "kind": c.kind,
+        "color": c.color,
+        "icon_emoji": c.icon_emoji,
+        "parent_id": c.parent_id,
+        "is_system": c.is_system,
+    }
 
 
 @api_bp.get("/categories")
@@ -330,6 +338,9 @@ def categories_create():
     name = data.get("name")
     kind = data.get("kind")
     color = data.get("color", "#888888")
+    icon_emoji = data.get("icon_emoji")
+    parent_id = data.get("parent_id")
+    is_system = data.get("is_system", False)
     if not name or not kind:
         return _error("name and kind required")
     supports_partial = _supports_partial_index()
@@ -342,7 +353,15 @@ def categories_create():
         )
         if exists:
             return _error("duplicate category name", status=409, errors={"name": ["exists"]})
-    c = Category(user_id=current_user.id, name=name, kind=kind, color=color)
+    c = Category(
+        user_id=current_user.id,
+        name=name,
+        kind=kind,
+        color=color,
+        icon_emoji=icon_emoji,
+        parent_id=parent_id,
+        is_system=is_system,
+    )
     db.session.add(c)
     try:
         db.session.commit()
@@ -384,7 +403,7 @@ def categories_update(id):
             )
             if exists:
                 return _error("duplicate category name", status=409, errors={"name": ["exists"]})
-    for field in ["name", "kind", "color"]:
+    for field in ["name", "kind", "color", "icon_emoji", "parent_id", "is_system"]:
         if field in data:
             setattr(c, field, data[field])
     try:
