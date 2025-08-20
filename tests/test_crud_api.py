@@ -65,6 +65,30 @@ def test_cruds(client):
     res = client.post(f'/api/categories/{cat_id}/restore')
     assert res.get_json()['data']['id'] == cat_id
 
+    # Category parent-child and extra fields
+    res = client.post(
+        '/api/categories',
+        json={'name': 'Bills', 'kind': 'expense', 'icon_emoji': '\U0001F4A1'},
+    )
+    parent_id = res.get_json()['data']['id']
+    res = client.post(
+        '/api/categories',
+        json={'name': 'Electricity', 'kind': 'expense', 'parent_id': parent_id},
+    )
+    child_id = res.get_json()['data']['id']
+    res = client.get(f'/api/categories/{child_id}')
+    data = res.get_json()['data']
+    assert data['parent_id'] == parent_id
+    assert data['icon_emoji'] is None
+    assert data['is_system'] is False
+    res = client.put(
+        f'/api/categories/{child_id}',
+        json={'icon_emoji': '\u26A1', 'is_system': True},
+    )
+    updated = res.get_json()['data']
+    assert updated['icon_emoji'] == '\u26A1'
+    assert updated['is_system'] is True
+
     # Rules
     res = client.post('/api/rules', json={'pattern': 'Star', 'category_id': cat_id})
     assert res.status_code == 201
