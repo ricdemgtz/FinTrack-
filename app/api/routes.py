@@ -1,7 +1,7 @@
 from flask import Blueprint, request, jsonify, current_app
 from flask_login import login_required, current_user
 from werkzeug.utils import secure_filename
-import os, hashlib
+import os, hashlib, re
 from datetime import date, datetime
 from .. import db
 from ..models import Transaction, Attachment, Account, Category, Rule
@@ -34,6 +34,17 @@ def _error(message, status=400, errors=None):
 def _supports_partial_index():
     bind = db.session.get_bind()
     return bind.dialect.name == "postgresql"
+
+
+_COLOR_RE = re.compile(r"^#?[0-9A-Fa-f]{6}$")
+
+
+def _normalize_color(value: str | None):
+    if value is None:
+        return None
+    if not _COLOR_RE.fullmatch(value):
+        return None
+    return f"#{value.lstrip('#').upper()}"
 
 @api_bp.post("/upload")
 @login_required
@@ -337,7 +348,7 @@ def categories_create():
     data = request.get_json() or {}
     name = (data.get("name") or "").strip()
     kind = data.get("kind")
-    color = data.get("color", "#888888")
+    color = _normalize_color(data.get("color", "#888888"))
     icon_emoji = data.get("icon_emoji")
     parent_id = data.get("parent_id")
     is_system = data.get("is_system", False)
@@ -345,6 +356,8 @@ def categories_create():
         return _error("invalid name", errors={"name": ["required or length"]})
     if not kind:
         return _error("name and kind required")
+    if color is None:
+        return _error("invalid color", status=422, errors={"color": ["invalid hex"]})
     supports_partial = _supports_partial_index()
     if not supports_partial:
         exists = (
@@ -408,6 +421,11 @@ def categories_update(id):
             if exists:
                 return _error("duplicate category name", status=409, errors={"name": ["exists"]})
         data["name"] = name
+    if "color" in data:
+        norm = _normalize_color(data["color"])
+        if norm is None:
+            return _error("invalid color", status=422, errors={"color": ["invalid hex"]})
+        data["color"] = norm
     for field in ["name", "kind", "color", "icon_emoji", "parent_id", "is_system"]:
         if field in data:
             setattr(c, field, data[field])

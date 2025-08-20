@@ -58,7 +58,7 @@ def test_cruds(client):
     res = client.get('/api/categories')
     assert len(res.get_json()['data']) == 1
     res = client.put(f'/api/categories/{cat_id}', json={'color': '#ff0000'})
-    assert res.get_json()['data']['color'] == '#ff0000'
+    assert res.get_json()['data']['color'] == '#FF0000'
     res = client.delete(f'/api/categories/{cat_id}')
     assert res.get_json()['success'] is True
     assert client.get('/api/categories').get_json()['data'] == []
