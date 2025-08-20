@@ -60,6 +60,8 @@ def test_cruds(client):
     res = client.put(f'/api/categories/{cat_id}', json={'color': '#ff0000'})
     assert res.get_json()['data']['color'] == '#FF0000'
     res = client.delete(f'/api/categories/{cat_id}')
+    assert res.status_code == 400
+    res = client.delete(f'/api/categories/{cat_id}?confirm=true')
     assert res.get_json()['success'] is True
     assert client.get('/api/categories').get_json()['data'] == []
     res = client.post(f'/api/categories/{cat_id}/restore')
@@ -81,13 +83,18 @@ def test_cruds(client):
     assert data['parent_id'] == parent_id
     assert data['icon_emoji'] is None
     assert data['is_system'] is False
-    res = client.put(
-        f'/api/categories/{child_id}',
-        json={'icon_emoji': '\u26A1', 'is_system': True},
-    )
+    res = client.put(f'/api/categories/{child_id}', json={'icon_emoji': '\u26A1'})
     updated = res.get_json()['data']
     assert updated['icon_emoji'] == '\u26A1'
-    assert updated['is_system'] is True
+    res = client.put(f'/api/categories/{child_id}', json={'is_system': True})
+    assert res.status_code == 400
+    assert client.get(f'/api/categories/{child_id}').get_json()['data']['is_system'] is False
+
+    # System categories cannot be deleted
+    res = client.post('/api/categories', json={'name': 'SysCat', 'kind': 'expense', 'is_system': True})
+    sys_id = res.get_json()['data']['id']
+    res = client.delete(f'/api/categories/{sys_id}?confirm=true')
+    assert res.status_code == 400
 
     # Prevent cycles in category hierarchy
     res = client.put(f'/api/categories/{parent_id}', json={'parent_id': child_id})

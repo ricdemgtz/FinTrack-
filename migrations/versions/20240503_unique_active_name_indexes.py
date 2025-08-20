@@ -24,8 +24,8 @@ def upgrade():
         'category',
         [sa.text('lower(name)'), 'user_id'],
         unique=True,
-        sqlite_where=sa.text('deleted_at IS NULL'),
-        postgresql_where=sa.text('deleted_at IS NULL'),
+        sqlite_where=sa.text('deleted_at IS NULL AND is_system = 0'),
+        postgresql_where=sa.text('deleted_at IS NULL AND is_system = FALSE'),
     )
 
 

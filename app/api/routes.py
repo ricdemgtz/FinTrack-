@@ -393,6 +393,7 @@ def categories_create():
             Category.query.filter(Category.user_id == current_user.id)
             .filter(db.func.lower(Category.name) == name.lower())
             .filter(Category.deleted_at.is_(None))
+            .filter(Category.is_system.is_(False))
             .first()
         )
         if exists:
@@ -434,6 +435,8 @@ def categories_get(id):
 def categories_update(id):
     c = _get_category(id)
     data = request.get_json() or {}
+    if "is_system" in data:
+        return _error("is_system cannot be modified")
     if "name" in data:
         name = (data["name"] or "").strip()
         if not name or not (1 <= len(name) <= 60):
@@ -445,6 +448,7 @@ def categories_update(id):
                 .filter(db.func.lower(Category.name) == name.lower())
                 .filter(Category.id != id)
                 .filter(Category.deleted_at.is_(None))
+                .filter(Category.is_system.is_(False))
                 .first()
             )
             if exists:
@@ -478,7 +482,7 @@ def categories_update(id):
             c.parent_id = parent_id
         else:
             c.parent_id = None
-    for field in ["name", "kind", "color", "icon_emoji", "is_system"]:
+    for field in ["name", "kind", "color", "icon_emoji"]:
         if field in data:
             setattr(c, field, data[field])
     try:
@@ -493,6 +497,10 @@ def categories_update(id):
 @login_required
 def categories_delete(id):
     c = _get_category(id)
+    if c.is_system:
+        return _error("cannot delete system category")
+    if request.args.get("confirm", "").lower() != "true":
+        return _error("confirmation required")
     c.deleted_at = datetime.utcnow()
     db.session.commit()
     return _success({"id": id})
@@ -510,6 +518,7 @@ def categories_restore(id):
             Category.query.filter(Category.user_id == current_user.id)
             .filter(db.func.lower(Category.name) == c.name.lower())
             .filter(Category.deleted_at.is_(None))
+            .filter(Category.is_system.is_(False))
             .first()
         )
         if dup:
