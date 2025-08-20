@@ -335,13 +335,15 @@ def categories_list():
 @login_required
 def categories_create():
     data = request.get_json() or {}
-    name = data.get("name")
+    name = (data.get("name") or "").strip()
     kind = data.get("kind")
     color = data.get("color", "#888888")
     icon_emoji = data.get("icon_emoji")
     parent_id = data.get("parent_id")
     is_system = data.get("is_system", False)
-    if not name or not kind:
+    if not name or not (1 <= len(name) <= 60):
+        return _error("invalid name", errors={"name": ["required or length"]})
+    if not kind:
         return _error("name and kind required")
     supports_partial = _supports_partial_index()
     if not supports_partial:
@@ -391,7 +393,9 @@ def categories_update(id):
     c = _get_category(id)
     data = request.get_json() or {}
     if "name" in data:
-        name = data["name"]
+        name = (data["name"] or "").strip()
+        if not name or not (1 <= len(name) <= 60):
+            return _error("invalid name", errors={"name": ["required or length"]})
         supports_partial = _supports_partial_index()
         if not supports_partial:
             exists = (
@@ -403,6 +407,7 @@ def categories_update(id):
             )
             if exists:
                 return _error("duplicate category name", status=409, errors={"name": ["exists"]})
+        data["name"] = name
     for field in ["name", "kind", "color", "icon_emoji", "parent_id", "is_system"]:
         if field in data:
             setattr(c, field, data[field])
