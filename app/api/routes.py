@@ -6,6 +6,7 @@ from datetime import date, datetime
 from .. import db
 from ..models import Transaction, Attachment, Account, Category, Rule
 from ..ocr import extract_fields
+from sqlalchemy.exc import IntegrityError
 
 api_bp = Blueprint("api", __name__)
 
@@ -28,6 +29,11 @@ def _error(message, status=400, errors=None):
     if errors:
         payload["errors"] = errors
     return jsonify(payload), status
+
+
+def _supports_partial_index():
+    bind = db.session.get_bind()
+    return bind.dialect.name == "postgresql"
 
 @api_bp.post("/upload")
 @login_required
@@ -143,14 +149,16 @@ def accounts_create():
             status=422,
             errors={"active": ["invalid"]},
         )
-    exists = (
-        Account.query.filter(Account.user_id == current_user.id)
-        .filter(db.func.lower(Account.name) == name.lower())
-        .filter(Account.deleted_at.is_(None))
-        .first()
-    )
-    if exists:
-        return _error("duplicate account name", status=409, errors={"name": ["exists"]})
+    supports_partial = _supports_partial_index()
+    if not supports_partial:
+        exists = (
+            Account.query.filter(Account.user_id == current_user.id)
+            .filter(db.func.lower(Account.name) == name.lower())
+            .filter(Account.deleted_at.is_(None))
+            .first()
+        )
+        if exists:
+            return _error("duplicate account name", status=409, errors={"name": ["exists"]})
     a = Account(
         user_id=current_user.id,
         name=name,
@@ -159,7 +167,12 @@ def accounts_create():
         opening_balance=opening_balance,
         active=active,
     )
-    db.session.add(a); db.session.commit()
+    db.session.add(a)
+    try:
+        db.session.commit()
+    except IntegrityError:
+        db.session.rollback()
+        return _error("duplicate account name", status=409, errors={"name": ["exists"]})
     return _success(_account_to_dict(a), status=201)
 
 
@@ -186,15 +199,17 @@ def accounts_update(id):
         name = (data["name"] or "").strip()
         if not name or not (1 <= len(name) <= 80):
             return _error("invalid name", errors={"name": ["required or length"]})
-        exists = (
-            Account.query.filter(Account.user_id == current_user.id)
-            .filter(db.func.lower(Account.name) == name.lower())
-            .filter(Account.id != id)
-            .filter(Account.deleted_at.is_(None))
-            .first()
-        )
-        if exists:
-            return _error("duplicate account name", status=409, errors={"name": ["exists"]})
+        supports_partial = _supports_partial_index()
+        if not supports_partial:
+            exists = (
+                Account.query.filter(Account.user_id == current_user.id)
+                .filter(db.func.lower(Account.name) == name.lower())
+                .filter(Account.id != id)
+                .filter(Account.deleted_at.is_(None))
+                .first()
+            )
+            if exists:
+                return _error("duplicate account name", status=409, errors={"name": ["exists"]})
         data["name"] = name
     if "type" in data:
         if data["type"] not in current_app.config.get("ALLOWED_ACCOUNT_TYPES", set()):
@@ -238,7 +253,11 @@ def accounts_update(id):
         a.active = data["active"]
     if "name" in data:
         a.name = data["name"]
-    db.session.commit()
+    try:
+        db.session.commit()
+    except IntegrityError:
+        db.session.rollback()
+        return _error("duplicate account name", status=409, errors={"name": ["exists"]})
     return _success(_account_to_dict(a))
 
 
@@ -265,19 +284,25 @@ def accounts_restore(id):
     a = _get_account(id, include_deleted=True)
     if a.deleted_at is None:
         return _success(_account_to_dict(a))
-    dup = (
-        Account.query.filter(Account.user_id == current_user.id)
-        .filter(db.func.lower(Account.name) == a.name.lower())
-        .filter(Account.deleted_at.is_(None))
-        .first()
-    )
-    if dup:
-        return _error("duplicate account name", status=409, errors={"name": ["exists"]})
+    supports_partial = _supports_partial_index()
+    if not supports_partial:
+        dup = (
+            Account.query.filter(Account.user_id == current_user.id)
+            .filter(db.func.lower(Account.name) == a.name.lower())
+            .filter(Account.deleted_at.is_(None))
+            .first()
+        )
+        if dup:
+            return _error("duplicate account name", status=409, errors={"name": ["exists"]})
     data = request.get_json() or {}
     a.deleted_at = None
     if data.get("active") is True:
         a.active = True
-    db.session.commit()
+    try:
+        db.session.commit()
+    except IntegrityError:
+        db.session.rollback()
+        return _error("duplicate account name", status=409, errors={"name": ["exists"]})
     return _success(_account_to_dict(a))
 
 
@@ -307,16 +332,23 @@ def categories_create():
     color = data.get("color", "#888888")
     if not name or not kind:
         return _error("name and kind required")
-    exists = (
-        Category.query.filter(Category.user_id == current_user.id)
-        .filter(db.func.lower(Category.name) == name.lower())
-        .filter(Category.deleted_at.is_(None))
-        .first()
-    )
-    if exists:
-        return _error("duplicate category name", status=409, errors={"name": ["exists"]})
+    supports_partial = _supports_partial_index()
+    if not supports_partial:
+        exists = (
+            Category.query.filter(Category.user_id == current_user.id)
+            .filter(db.func.lower(Category.name) == name.lower())
+            .filter(Category.deleted_at.is_(None))
+            .first()
+        )
+        if exists:
+            return _error("duplicate category name", status=409, errors={"name": ["exists"]})
     c = Category(user_id=current_user.id, name=name, kind=kind, color=color)
-    db.session.add(c); db.session.commit()
+    db.session.add(c)
+    try:
+        db.session.commit()
+    except IntegrityError:
+        db.session.rollback()
+        return _error("duplicate category name", status=409, errors={"name": ["exists"]})
     return _success(_category_to_dict(c), status=201)
 
 
@@ -341,19 +373,25 @@ def categories_update(id):
     data = request.get_json() or {}
     if "name" in data:
         name = data["name"]
-        exists = (
-            Category.query.filter(Category.user_id == current_user.id)
-            .filter(db.func.lower(Category.name) == name.lower())
-            .filter(Category.id != id)
-            .filter(Category.deleted_at.is_(None))
-            .first()
-        )
-        if exists:
-            return _error("duplicate category name", status=409, errors={"name": ["exists"]})
+        supports_partial = _supports_partial_index()
+        if not supports_partial:
+            exists = (
+                Category.query.filter(Category.user_id == current_user.id)
+                .filter(db.func.lower(Category.name) == name.lower())
+                .filter(Category.id != id)
+                .filter(Category.deleted_at.is_(None))
+                .first()
+            )
+            if exists:
+                return _error("duplicate category name", status=409, errors={"name": ["exists"]})
     for field in ["name", "kind", "color"]:
         if field in data:
             setattr(c, field, data[field])
-    db.session.commit()
+    try:
+        db.session.commit()
+    except IntegrityError:
+        db.session.rollback()
+        return _error("duplicate category name", status=409, errors={"name": ["exists"]})
     return _success(_category_to_dict(c))
 
 
@@ -372,16 +410,22 @@ def categories_restore(id):
     c = _get_category(id, include_deleted=True)
     if c.deleted_at is None:
         return _success(_category_to_dict(c))
-    dup = (
-        Category.query.filter(Category.user_id == current_user.id)
-        .filter(db.func.lower(Category.name) == c.name.lower())
-        .filter(Category.deleted_at.is_(None))
-        .first()
-    )
-    if dup:
-        return _error("duplicate category name", status=409, errors={"name": ["exists"]})
+    supports_partial = _supports_partial_index()
+    if not supports_partial:
+        dup = (
+            Category.query.filter(Category.user_id == current_user.id)
+            .filter(db.func.lower(Category.name) == c.name.lower())
+            .filter(Category.deleted_at.is_(None))
+            .first()
+        )
+        if dup:
+            return _error("duplicate category name", status=409, errors={"name": ["exists"]})
     c.deleted_at = None
-    db.session.commit()
+    try:
+        db.session.commit()
+    except IntegrityError:
+        db.session.rollback()
+        return _error("duplicate category name", status=409, errors={"name": ["exists"]})
     return _success(_category_to_dict(c))
 
 
