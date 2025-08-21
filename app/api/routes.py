@@ -501,9 +501,21 @@ def categories_delete(id):
         return _error("cannot delete system category")
     if request.args.get("confirm", "").lower() != "true":
         return _error("confirmation required")
+    rules = (
+        Rule.query.filter_by(user_id=current_user.id, category_id=id, active=True)
+        .filter(Rule.deleted_at.is_(None))
+        .all()
+    )
+    for r in rules:
+        r.active = False
+    if rules:
+        current_app.logger.warning(
+            "Disabling %d rule(s) referencing deleted category %s", len(rules), id
+        )
     c.deleted_at = datetime.utcnow()
     db.session.commit()
-    return _success({"id": id})
+    count = len(rules)
+    return _success({"id": id, "disabled_rules": count}, message=f"{count} rule(s) disabled")
 
 
 @api_bp.post("/categories/<int:id>/restore")
@@ -524,12 +536,23 @@ def categories_restore(id):
         if dup:
             return _error("duplicate category name", status=409, errors={"name": ["exists"]})
     c.deleted_at = None
+    rules = (
+        Rule.query.filter_by(user_id=current_user.id, category_id=id, active=False)
+        .filter(Rule.deleted_at.is_(None))
+        .all()
+    )
+    for r in rules:
+        r.active = True
     try:
         db.session.commit()
     except IntegrityError:
         db.session.rollback()
         return _error("duplicate category name", status=409, errors={"name": ["exists"]})
-    return _success(_category_to_dict(c))
+    count = len(rules)
+    return _success(
+        {**_category_to_dict(c), "reenabled_rules": count},
+        message=f"{count} rule(s) re-enabled",
+    )
 
 
 # --- Rules CRUD ---
