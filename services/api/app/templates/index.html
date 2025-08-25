@@ -1,0 +1,17 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <title>FinTrack Dashboard</title>
+</head>
+<body>
+    <h1>Transactions</h1>
+    <ul>
+    {% for tx in transactions %}
+        <li>{{ tx.date }} - {{ tx.merchant or "N/A" }} - {{ tx.amount }}</li>
+    {% else %}
+        <li>No transactions</li>
+    {% endfor %}
+    </ul>
+</body>
+</html>
