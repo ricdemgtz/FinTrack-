@@ -3,15 +3,26 @@
 <head>
     <meta charset="utf-8">
     <title>FinTrack Dashboard</title>
+    <link rel="stylesheet" href="/static/style.css">
 </head>
 <body>
-    <h1>Transactions</h1>
-    <ul>
-    {% for tx in transactions %}
-        <li>{{ tx.date }} - {{ tx.merchant or "N/A" }} - {{ tx.amount }}</li>
-    {% else %}
-        <li>No transactions</li>
-    {% endfor %}
-    </ul>
+    <h1>Recent Transactions</h1>
+    <p>Balance: {{ '%.2f' % balance }}</p>
+    <table>
+        <thead>
+            <tr><th>Date</th><th>Merchant</th><th>Amount</th></tr>
+        </thead>
+        <tbody>
+        {% for tx in transactions %}
+            <tr>
+                <td>{{ tx.date }}</td>
+                <td>{{ tx.merchant or 'N/A' }}</td>
+                <td>{{ '%.2f' % tx.amount }}</td>
+            </tr>
+        {% else %}
+            <tr><td colspan="3">No transactions</td></tr>
+        {% endfor %}
+        </tbody>
+    </table>
 </body>
 </html>
