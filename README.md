@@ -28,11 +28,13 @@ docker-compose up --build
 ```
 
 ## Bot de Discord
+El bot usa [discord.py](https://discordpy.readthedocs.io/) y expone los comandos `/gasto`, `/ingreso` y `/foto`.
+
 1. Crea una aplicación en el [Portal de Desarrolladores de Discord](https://discord.com/developers/applications).
 2. En "Bot", habilita los scopes `bot` y `applications.commands` al generar el enlace de invitación.
 3. Intents requeridos: `Guilds` (por defecto) y `Message Content` si deseas procesar adjuntos.
 4. Invita el bot a tu servidor usando el enlace generado.
-5. Guarda el token en `.env` (`DISCORD_BOT_TOKEN`) y opcionalmente el ID de tu guild en `DISCORD_GUILD_ID`.
+5. Copia el token del bot y colócalo en `.env` como `DISCORD_BOT_TOKEN`. Opcionalmente define `DISCORD_GUILD_ID`.
 
 ## Túnel con Cloudflared
 1. Instala [cloudflared](https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/).
