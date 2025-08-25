@@ -1,14 +1,17 @@
 from __future__ import annotations
 
+import logging
 from pathlib import Path
 from typing import Optional
 
+import redis.asyncio as redis
 from fastapi import Depends, FastAPI, Request
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from sqlalchemy import select, func
 from sqlalchemy.orm import Session
+from starlette.middleware.base import BaseHTTPMiddleware
 
 from .classify import apply_rules
 from .config import settings
@@ -17,10 +20,55 @@ from .models import Base, Rule, Transaction
 from .notion import NotionClient
 from .schemas import OCRWebhook, TransactionCreate, TransactionRead
 
+try:
+    from pythonjsonlogger import jsonlogger
+except Exception:  # pragma: no cover
+    jsonlogger = None
+
 # Create tables on startup (for demo/testing purposes)
 Base.metadata.create_all(bind=engine)
 
+# Configure JSON logging
+logger = logging.getLogger()
+handler = logging.StreamHandler()
+if jsonlogger:
+    handler.setFormatter(jsonlogger.JsonFormatter())
+else:
+    handler.setFormatter(logging.Formatter('{"level": "%(levelname)s", "message": "%(message)s"}'))
+logger.handlers = [handler]
+logger.setLevel(settings.log_level.upper())
+
+# Redis rate limiting middleware
+redis_client = redis.from_url(settings.redis_url, encoding="utf-8", decode_responses=True)
+
+def parse_rate(rate: str) -> tuple[int, int]:
+    amount, per = rate.split('/')
+    periods = {'second': 1, 'minute': 60, 'hour': 3600, 'day': 86400}
+    return int(amount), periods.get(per, 60)
+
+limit, period = parse_rate(settings.rate_limit)
+
+class RateLimiterMiddleware(BaseHTTPMiddleware):
+    def __init__(self, app, limit: int, period: int):
+        super().__init__(app)
+        self.limit = limit
+        self.period = period
+
+    async def dispatch(self, request: Request, call_next):
+        ip = request.client.host
+        key = f"rl:{ip}"
+        try:
+            current = await redis_client.incr(key)
+            if current == 1:
+                await redis_client.expire(key, self.period)
+            if current > self.limit:
+                return JSONResponse(status_code=429, content={"detail": "Rate limit exceeded"})
+        except Exception:
+            pass
+        return await call_next(request)
+
 app = FastAPI(title="FinTrack API")
+app.add_middleware(RateLimiterMiddleware, limit=limit, period=period)
 
 app.mount(
     "/static", StaticFiles(directory=str(Path(__file__).parent / "static")), name="static"
@@ -66,7 +114,9 @@ def create_transaction(payload: TransactionCreate, db: Session = Depends(get_db)
     if tx.category_id is None:
         rules = db.execute(select(Rule).where(Rule.user_id == tx.user_id)).scalars().all()
         rule_dicts = [r.__dict__ for r in rules]
-        cat = apply_rules(rule_dicts, {"merchant": tx.merchant, "note": tx.note, "amount": float(tx.amount)})
+        cat = apply_rules(
+            rule_dicts, {"merchant": tx.merchant, "note": tx.note, "amount": float(tx.amount)}
+        )
         if cat:
             tx.category_id = cat
             db.add(tx)
@@ -98,7 +148,9 @@ def webhook_ocr(payload: OCRWebhook, db: Session = Depends(get_db)):
     if tx.category_id is None:
         rules = db.execute(select(Rule).where(Rule.user_id == tx.user_id)).scalars().all()
         rule_dicts = [r.__dict__ for r in rules]
-        cat = apply_rules(rule_dicts, {"merchant": tx.merchant, "note": tx.note, "amount": float(tx.amount)})
+        cat = apply_rules(
+            rule_dicts, {"merchant": tx.merchant, "note": tx.note, "amount": float(tx.amount)}
+        )
         if cat:
             tx.category_id = cat
             db.add(tx)
