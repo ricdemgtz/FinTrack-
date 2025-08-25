@@ -89,3 +89,26 @@ fintrack/
 - OCR and PDF export are stubbed with safe defaults; you'll implement them incrementally.
 - The DB defaults to SQLite for easy local dev; you can switch to MySQL/Postgres by setting `DATABASE_URL` in `.env`.
 - Make sure `tesseract-ocr` is installed on your OS if you use OCR.
+
+
+## Environment Variables
+
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `RATE_LIMIT` | Requests allowed per minute for public API endpoints. | `100/minute` |
+| `LOG_LEVEL` | Logging verbosity for the API service. | `info` |
+
+## Discord Bot
+
+A basic Discord bot lives in `services/bot/main.py` and exposes the slash commands `/gasto`, `/ingreso` and `/foto`.
+
+1. Create an application and bot at the [Discord Developer Portal](https://discord.com/developers/applications).
+2. Copy the bot token and set it in your `.env` file as `DISCORD_BOT_TOKEN`.
+3. Invite the bot to your server with the **bot** and **applications.commands** scopes.
+4. Run the bot locally:
+
+   ```bash
+   python services/bot/main.py
+   ```
+
+The `/gasto` and `/ingreso` commands send transactions to the API, while `/foto` forwards an attached image to the OCR webhook.
