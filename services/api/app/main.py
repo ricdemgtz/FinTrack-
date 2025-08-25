@@ -3,11 +3,13 @@ from __future__ import annotations
 import logging
 from pathlib import Path
 from typing import Optional
+import json
+
+
+from fastapi import Depends, FastAPI, Request, Header, HTTPException
+from fastapi.responses import HTMLResponse
 
 import redis.asyncio as redis
-from fastapi import Depends, FastAPI, Request
-from fastapi.responses import HTMLResponse, JSONResponse
-from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from sqlalchemy import select, func
 from sqlalchemy.orm import Session
@@ -16,9 +18,10 @@ from starlette.middleware.base import BaseHTTPMiddleware
 from .classify import apply_rules
 from .config import settings
 from .database import engine, get_db
-from .models import Base, Rule, Transaction
+from .models import Base, Rule, Transaction, Attachment
 from .notion import NotionClient
-from .schemas import OCRWebhook, TransactionCreate, TransactionRead
+from .schemas import TransactionCreate, TransactionRead
+from .security import verify_hmac
 
 try:
     from pythonjsonlogger import jsonlogger
@@ -138,12 +141,42 @@ def list_transactions(db: Session = Depends(get_db), user_id: Optional[int] = No
     return items
 
 
-@app.post("/webhooks/ocr", response_model=TransactionRead)
-def webhook_ocr(payload: OCRWebhook, db: Session = Depends(get_db)):
-    tx = Transaction(**payload.dict())
-    db.add(tx)
-    db.commit()
-    db.refresh(tx)
+@app.post("/webhooks/ocr")
+async def webhook_ocr(
+    request: Request,
+    x_signature: str | None = Header(default=None),
+    db: Session = Depends(get_db),
+):
+    body = await request.body()
+    if not x_signature or not verify_hmac(body, x_signature, settings.webhook_secret):
+        raise HTTPException(status_code=400, detail="invalid signature")
+
+    data = json.loads(body.decode())
+    attachment_id = data.get("attachment_id")
+    text = data.get("text")
+    if attachment_id is None:
+        raise HTTPException(status_code=422, detail="attachment_id required")
+
+    att = db.get(Attachment, attachment_id)
+    if att is None:
+        raise HTTPException(status_code=404, detail="attachment not found")
+
+    att.ocr_text = text
+    db.add(att)
+
+    if att.transaction_id:
+        tx = db.get(Transaction, att.transaction_id)
+        if tx and tx.category_id is None:
+            rules = db.execute(select(Rule).where(Rule.user_id == tx.user_id)).scalars().all()
+            rule_dicts = [r.__dict__ for r in rules]
+            cat = apply_rules(
+                rule_dicts,
+                {"merchant": tx.merchant, "note": tx.note, "amount": float(tx.amount)},
+            )
+            if cat:
+                tx.category_id = cat
+                db.add(tx)
+
 
     if tx.category_id is None:
         rules = db.execute(select(Rule).where(Rule.user_id == tx.user_id)).scalars().all()
@@ -160,4 +193,4 @@ def webhook_ocr(payload: OCRWebhook, db: Session = Depends(get_db)):
     if notion_client:
         notion_client.create_transaction({"id": tx.id, "amount": float(tx.amount), "merchant": tx.merchant})
 
-    return tx
+    return {"status": "ok"}

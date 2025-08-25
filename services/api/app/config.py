@@ -8,6 +8,7 @@ class Settings(BaseSettings):
     enable_notion: bool = False
     notion_token: str | None = None
     notion_database_id: str | None = None
+    webhook_secret: str = "changeme"
 
     # Redis configuration for rate limiting
     redis_host: str = "redis"

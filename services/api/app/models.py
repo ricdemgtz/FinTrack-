@@ -101,4 +101,5 @@ class Attachment(Base):
     mime: Mapped[str | None] = mapped_column(String(64))
     size: Mapped[int | None] = mapped_column(Integer)
     sha256: Mapped[str | None] = mapped_column(String(64), index=True)
+    ocr_text: Mapped[str | None] = mapped_column(String, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
