@@ -90,6 +90,14 @@ fintrack/
 - The DB defaults to SQLite for easy local dev; you can switch to MySQL/Postgres by setting `DATABASE_URL` in `.env`.
 - Make sure `tesseract-ocr` is installed on your OS if you use OCR.
 
+
+## Environment Variables
+
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `RATE_LIMIT` | Requests allowed per minute for public API endpoints. | `100/minute` |
+| `LOG_LEVEL` | Logging verbosity for the API service. | `info` |
+
 ## Discord Bot
 
 A basic Discord bot lives in `services/bot/main.py` and exposes the slash commands `/gasto`, `/ingreso` and `/foto`.
