@@ -5,8 +5,9 @@ from typing import Optional
 
 from fastapi import Depends, FastAPI, Request
 from fastapi.responses import HTMLResponse
+from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
-from sqlalchemy import select
+from sqlalchemy import select, func
 from sqlalchemy.orm import Session
 
 from .classify import apply_rules
@@ -20,6 +21,10 @@ from .schemas import OCRWebhook, TransactionCreate, TransactionRead
 Base.metadata.create_all(bind=engine)
 
 app = FastAPI(title="FinTrack API")
+
+app.mount(
+    "/static", StaticFiles(directory=str(Path(__file__).parent / "static")), name="static"
+)
 
 templates = Jinja2Templates(directory=str(Path(__file__).parent / "templates"))
 
@@ -35,8 +40,20 @@ def health():
 
 @app.get("/", response_class=HTMLResponse)
 def index(request: Request, db: Session = Depends(get_db)):
-    transactions = db.execute(select(Transaction).order_by(Transaction.id.desc())).scalars().all()
-    return templates.TemplateResponse("index.html", {"request": request, "transactions": transactions})
+    transactions = (
+        db.execute(
+            select(Transaction)
+            .order_by(Transaction.date.desc(), Transaction.id.desc())
+            .limit(10)
+        )
+        .scalars()
+        .all()
+    )
+    balance = float(db.execute(select(func.sum(Transaction.amount))).scalar() or 0)
+    return templates.TemplateResponse(
+        "index.html",
+        {"request": request, "transactions": transactions, "balance": balance},
+    )
 
 
 @app.post("/transactions", response_model=TransactionRead)
