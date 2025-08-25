@@ -1,114 +1,88 @@
-# FinTrack+ (Scaffold)
+# FinTrack+
 
-This is the starter scaffold for **FinTrack+**, your CS50 final project.
-It includes a minimal Flask app with blueprints, models, templates, and a basic UI.
+FinTrack+ es un entorno de desarrollo basado en Docker para una API de seguimiento de gastos, un bot de Discord y flujos de automatización con n8n.
 
-## Quickstart
+## Variables de entorno
 
-Interactively explore the basic setup using the expandable sections below.
-
-<details>
-<summary><strong>📦 Environment setup</strong></summary>
-
-1. Create and activate a virtual environment
-
-    ```bash
-    python -m venv .venv
-    source .venv/bin/activate  # Windows: .venv\Scripts\activate
-    ```
-
-2. Install dependencies
-
-    ```bash
-    pip install -r requirements.txt
-    ```
-
-3. Configure environment variables
-
-    ```bash
-    cp .env.example .env
-    ```
-
-</details>
-
-<details>
-<summary><strong>🚀 Run the app</strong></summary>
-
-```bash
-python run.py
-```
-
-Then open http://localhost:5000 in your browser.
-
-</details>
-
-## Structure
-
-```
-fintrack/
-├── app/
-│   ├── __init__.py
-│   ├── config.py
-│   ├── models.py
-│   ├── ocr.py
-│   ├── classify.py
-│   ├── auth/
-│   │   └── routes.py
-│   ├── api/
-│   │   └── routes.py
-│   ├── web/
-│   │   └── routes.py
-│   ├── templates/
-│   │   ├── base.html
-│   │   ├── dashboard.html
-│   │   ├── upload.html
-│   │   ├── auth/
-│   │   │   ├── login.html
-│   │   │   └── register.html
-│   │   ├── transactions/
-│   │   │   └── list.html
-│   │   └── rules/
-│   │       └── list.html
-│   ├── static/
-│   │   ├── css/
-│   │   │   └── main.css
-│   │   └── js/
-│   │       └── main.js
-│   └── uploads/  # created at runtime
-├── migrations/   # reserved for Flask-Migrate
-├── tests/
-│   └── test_sanity.py
-├── .env.example
-├── requirements.txt
-├── run.py
-└── README.md
-```
-
-## Notes
-
-- OCR and PDF export are stubbed with safe defaults; you'll implement them incrementally.
-- The DB defaults to SQLite for easy local dev; you can switch to MySQL/Postgres by setting `DATABASE_URL` in `.env`.
-- Make sure `tesseract-ocr` is installed on your OS if you use OCR.
-
-
-## Environment Variables
-
-| Variable | Description | Default |
-|----------|-------------|---------|
-| `RATE_LIMIT` | Requests allowed per minute for public API endpoints. | `100/minute` |
-| `LOG_LEVEL` | Logging verbosity for the API service. | `info` |
-
-## Discord Bot
-
-A basic Discord bot lives in `services/bot/main.py` and exposes the slash commands `/gasto`, `/ingreso` and `/foto`.
-
-1. Create an application and bot at the [Discord Developer Portal](https://discord.com/developers/applications).
-2. Copy the bot token and set it in your `.env` file as `DISCORD_BOT_TOKEN`.
-3. Invite the bot to your server with the **bot** and **applications.commands** scopes.
-4. Run the bot locally:
-
+1. Copia el archivo de ejemplo y completa los valores necesarios.
    ```bash
-   python services/bot/main.py
+   cp .env.example .env
+   ```
+2. Ajusta credenciales de base de datos y Redis.
+3. Define `DISCORD_BOT_TOKEN` y `DISCORD_GUILD_ID` para el bot.
+4. Añade claves de Notion si deseas sincronización opcional (`NOTION_API_KEY`, `NOTION_DATABASE_ID`).
+
+## Levantar los servicios
+
+Con **Make**:
+```bash
+make dev      # build + up en primer plano
+make up       # solo levantar en segundo plano
+make logs     # seguir logs
+make migrate  # aplicar migraciones
+```
+
+Directamente con **docker-compose**:
+```bash
+docker-compose up --build
+```
+
+## Bot de Discord
+1. Crea una aplicación en el [Portal de Desarrolladores de Discord](https://discord.com/developers/applications).
+2. En "Bot", habilita los scopes `bot` y `applications.commands` al generar el enlace de invitación.
+3. Intents requeridos: `Guilds` (por defecto) y `Message Content` si deseas procesar adjuntos.
+4. Invita el bot a tu servidor usando el enlace generado.
+5. Guarda el token en `.env` (`DISCORD_BOT_TOKEN`) y opcionalmente el ID de tu guild en `DISCORD_GUILD_ID`.
+
+## Túnel con Cloudflared
+1. Instala [cloudflared](https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/).
+2. Inicia sesión y crea un túnel:
+   ```bash
+   cloudflared tunnel login
+   cloudflared tunnel create fintrack
+   ```
+3. Copia la configuración de ejemplo y edítala:
+   ```bash
+   cp cloudflared/config.yaml.example cloudflared/config.yaml
+   ```
+   Sustituye `tunnel`, `credentials-file` y define los hostnames necesarios:
+   ```yaml
+   ingress:
+     - hostname: api.tudominio.com
+       service: http://api:8000
+     - hostname: bot.tudominio.com
+       service: http://bot:3000
+     - hostname: worker.tudominio.com
+       service: http://worker:3000
+     - hostname: n8n.tudominio.com
+       service: http://n8n:5678
+     - service: http_status:404
+   ```
+4. Ejecuta el túnel:
+   ```bash
+   cloudflared tunnel --config cloudflared/config.yaml run fintrack
    ```
 
-The `/gasto` and `/ingreso` commands send transactions to the API, while `/foto` forwards an attached image to the OCR webhook.
+## Ejemplos
+- **Comprobar salud de la API**:
+  ```bash
+  curl https://api.tudominio.com/health
+  ```
+- **Registrar gasto vía Discord**: en tu servidor escribe `/gasto 12.50 Starbucks Latte`.
+- **Flujo OCR con n8n**:
+  1. Envía `/foto` con una imagen desde Discord.
+  2. El bot reenvía la imagen al webhook de n8n.
+  3. n8n realiza OCR y POSTea el texto a `https://api.tudominio.com/webhooks/ocr`.
+  4. La API guarda el resultado junto al attachment correspondiente.
+
+## Servicios y puertos
+| Servicio | Puerto | Descripción |
+|----------|--------|-------------|
+| api      | 8000   | API principal (FastAPI) |
+| bot      | 3000   | Bot de Discord (HTTP opcional) |
+| worker   | 3000   | Procesamiento de OCR |
+| db       | 5432   | PostgreSQL |
+| redis    | 6379   | Almacenamiento de colas y rate limit |
+| n8n      | 5678   | Flujos de automatización |
+| watchtower | -    | Actualización automática de contenedores |
+
